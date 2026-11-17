@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VocalClear AI — Free In-Browser Background Music & Voice Separator</title>
+  <title>VocalClear AI — In-Browser Audio & Video Separator and Voice Generator</title>
   
   <!-- Enable Cross-Origin Isolation for WebGPU & WASM SharedArrayBuffer on GitHub Pages -->
   <script src="coi-serviceworker.js"></script>
@@ -15,192 +15,338 @@
   <div class="bg-glow"></div>
 
   <div class="container">
-    <!-- Header -->
-    <header>
-      <div class="top-badges">
-        <span class="badge green">✨ 100% Free Forever</span>
-        <span class="badge">🔒 In-Browser &bull; Private &bull; No Uploads</span>
-        <span class="badge purple" id="deviceBadge">⚡ Checking Hardware Acceleration...</span>
-      </div>
-      <h1 class="app-title">Background & Voice Separator</h1>
-      <p class="app-subtitle">
-        Separate any video or song into isolated <b>Vocals</b> and clean <b>Background Music & Sound Effects</b> directly in your browser using Meta's HTDemucs AI.
-      </p>
-    </header>
+    <!-- Global Navigation Tabs at Top -->
+    <nav class="app-nav-tabs">
+      <button type="button" class="tab-button active" id="tabBtnSeparator">
+        <span class="tab-btn-icon">🎵</span>
+        <span class="tab-btn-title">Audio & Video Separator</span>
+      </button>
+      <button type="button" class="tab-button" id="tabBtnVoiceGen">
+        <span class="tab-btn-icon">🎙️</span>
+        <span class="tab-btn-title">AI Voice Generator</span>
+        <span class="tab-pill-new">New</span>
+      </button>
+    </nav>
 
-    <!-- Upload Card -->
-    <label class="upload-card" id="dropZone" for="fileInput">
-      <input type="file" id="fileInput" multiple accept="audio/*,video/*" style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;">
-      <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-      </svg>
-      <div class="upload-title" id="uploadTitle">Drop your Audio or Video files here</div>
-      <div class="upload-desc" id="uploadDesc">Click anywhere to browse &bull; Single file or Multi-file Batch Upload</div>
-      <div class="supported-formats">MP4, WebM, MOV, MKV &bull; MP3, WAV, M4A, FLAC, OGG</div>
-      <div class="upload-actions-row">
-        <button type="button" class="btn-demo" id="btnLoadDemo" onclick="event.preventDefault(); event.stopPropagation();">
-          <span>🎧 Try Demo Audio</span>
-        </button>
-        <span class="upload-pill">📁 Batch Upload Enabled</span>
-      </div>
-    </label>
+    <!-- ========================================== -->
+    <!-- TAB 1: AUDIO & VIDEO SEPARATOR             -->
+    <!-- ========================================== -->
+    <div id="separatorTabContent" class="tab-content active">
+      <!-- Header -->
+      <header>
+        <div class="top-badges">
+          <span class="badge green">✨ 100% Free Forever</span>
+          <span class="badge">🔒 In-Browser &bull; Private &bull; No Uploads</span>
+          <span class="badge purple" id="deviceBadge">⚡ Checking Hardware Acceleration...</span>
+        </div>
+        <h1 class="app-title">Background & Voice Separator</h1>
+        <p class="app-subtitle">
+          Separate any video or song into isolated <b>Vocals</b> and clean <b>Background Music & Sound Effects</b> directly in your browser using Meta's HTDemucs AI.
+        </p>
+      </header>
 
-    <!-- Batch Queue Section (visible when multiple files are queued) -->
-    <div class="batch-queue-card" id="batchQueueCard" style="display: none;">
-      <div class="batch-header">
-        <div class="batch-title">
-          <span>📋 Batch Upload Queue</span>
-          <span class="badge purple" id="batchCountBadge">0 Files</span>
+      <!-- Upload Card -->
+      <label class="upload-card" id="dropZone" for="fileInput">
+        <input type="file" id="fileInput" multiple accept="audio/*,video/*" style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;">
+        <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+        </svg>
+        <div class="upload-title" id="uploadTitle">Drop your Audio or Video files here</div>
+        <div class="upload-desc" id="uploadDesc">Click anywhere to browse &bull; Single file or Multi-file Batch Upload</div>
+        <div class="supported-formats">MP4, WebM, MOV, MKV &bull; MP3, WAV, M4A, FLAC, OGG</div>
+        <div class="upload-actions-row">
+          <button type="button" class="btn-demo" id="btnLoadDemo" onclick="event.preventDefault(); event.stopPropagation();">
+            <span>🎧 Try Demo Audio</span>
+          </button>
+          <span class="upload-pill">📁 Batch Upload Enabled</span>
         </div>
-        <div class="batch-controls">
-          <button type="button" class="btn-batch-action" id="btnBatchClear">🗑️ Clear Queue</button>
+      </label>
+
+      <!-- Batch Queue Section (visible when multiple files are queued) -->
+      <div class="batch-queue-card" id="batchQueueCard" style="display: none;">
+        <div class="batch-header">
+          <div class="batch-title">
+            <span>📋 Batch Upload Queue</span>
+            <span class="badge purple" id="batchCountBadge">0 Files</span>
+          </div>
+          <div class="batch-controls">
+            <button type="button" class="btn-batch-action" id="btnBatchClear">🗑️ Clear Queue</button>
+          </div>
+        </div>
+        <div class="batch-items-list" id="batchItemsList">
+          <!-- Rendered dynamically -->
         </div>
       </div>
-      <div class="batch-items-list" id="batchItemsList">
-        <!-- Rendered dynamically -->
+
+      <!-- Engine Options -->
+      <div class="settings-grid">
+        <div class="setting-card selected" id="optDemucs">
+          <div class="setting-header">
+            <div class="setting-title">
+              <span>🧠 Meta HTDemucs AI</span>
+              <span class="badge green">Studio Quality</span>
+            </div>
+            <input type="radio" name="engine" value="demucs" checked>
+          </div>
+          <div class="setting-desc">
+            State-of-the-art 4-stem deep learning model. Separates vocals and background music with pristine broadcast fidelity. Runs locally via WebGPU/WASM.
+          </div>
+        </div>
+
+        <div class="setting-card" id="optDsp">
+          <div class="setting-header">
+            <div class="setting-title">
+              <span>⚡ Instant Vocal Extractor (DSP)</span>
+              <span class="badge">0-Second Speed</span>
+            </div>
+            <input type="radio" name="engine" value="dsp">
+          </div>
+          <div class="setting-desc">
+            Zero-wait center channel cancellation. Instant processing for quick karaoke, testing, or older laptops without downloading the neural weights.
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button class="btn-action-primary" id="btnProcess" disabled>
+        <span>🚀 Select Audio or Video to Start</span>
+      </button>
+
+      <!-- Progress Card -->
+      <div class="progress-box" id="progressBox">
+        <div class="progress-header">
+          <span class="progress-title" id="progressTitle">Processing Audio...</span>
+          <span class="progress-pct" id="progressPct">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressBar"></div>
+        </div>
+        <div class="progress-status" id="progressStatus">Initializing...</div>
+      </div>
+
+      <!-- Studio Workspace: SIDE-BY-SIDE VIDEO PLAYERS & DOWNLOAD OPTIONS -->
+      <div class="studio-workspace" id="studioWorkspace" style="display: none;">
+        <div class="studio-header">
+          <div class="studio-title-area">
+            <h2 class="studio-title">Separation Results</h2>
+            <div class="studio-file-info">
+              <span class="badge purple" id="studioFileTitle">Video Stems</span>
+              <span class="studio-file-sub" id="studioFileSubtitle">Independent Vocal & Background Video Players</span>
+            </div>
+          </div>
+          <div class="studio-controls-top">
+            <button type="button" class="btn-sync-toggle active" id="btnSyncBoth">
+              <span>🔗 Sync Playback</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2 Columns Grid: Side-by-Side Video Stems -->
+        <div class="video-outputs-grid" id="videoOutputsGrid">
+          
+          <!-- Output 1: Narrator Voice Only -->
+          <div class="video-output-card" id="cardVocals">
+            <div class="video-card-header">
+              <div class="video-title-wrap">
+                <span class="stem-badge vocals">🗣️ Vocals Only</span>
+                <h3 class="video-card-title">Narrator & Voices</h3>
+              </div>
+              <span class="badge green">Isolated Speech</span>
+            </div>
+
+            <!-- Video / Audio Player -->
+            <div class="media-container" id="containerVocals">
+              <video id="videoVocals" class="player-media-element" playsinline controls></video>
+              <div class="audio-view-fallback" id="audioFallbackVocals" style="display: none;">
+                <canvas id="canvasVocals" class="audio-canvas"></canvas>
+                <audio id="audioVocals" controls class="native-audio-player"></audio>
+              </div>
+            </div>
+
+            <!-- EXACTLY TWO OPTIONS BELOW: Download MP4 & Download MP3 -->
+            <div class="video-actions-bar">
+              <button class="btn-download-primary" id="btnDlVocalsMp4">
+                <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                <span>Download MP4</span>
+              </button>
+              <button class="btn-download-secondary" id="btnDlVocalsMp3">
+                <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+                <span>Download MP3</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Output 2: Background Music Only -->
+          <div class="video-output-card" id="cardBgm">
+            <div class="video-card-header">
+              <div class="video-title-wrap">
+                <span class="stem-badge bgm">🎵 Background Only</span>
+                <h3 class="video-card-title">Music & Sound Effects</h3>
+              </div>
+              <span class="badge green">Clean BGM</span>
+            </div>
+
+            <!-- Video / Audio Player -->
+            <div class="media-container" id="containerBgm">
+              <video id="videoBgm" class="player-media-element" playsinline controls></video>
+              <div class="audio-view-fallback" id="audioFallbackBgm" style="display: none;">
+                <canvas id="canvasBgm" class="audio-canvas"></canvas>
+                <audio id="audioBgm" controls class="native-audio-player"></audio>
+              </div>
+            </div>
+
+            <!-- EXACTLY TWO OPTIONS BELOW: Download MP4 & Download MP3 -->
+            <div class="video-actions-bar">
+              <button class="btn-download-primary" id="btnDlBgmMp4">
+                <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                <span>Download MP4</span>
+              </button>
+              <button class="btn-download-secondary" id="btnDlBgmMp3">
+                <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+                <span>Download MP3</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Studio Bottom Bar -->
+        <div class="bulk-download-bar">
+          <div class="bulk-title">
+            <span>📦 Batch & Export Options</span>
+            <span class="bulk-subtitle" id="bulkSubtitle">Quickly save both outputs or process other files</span>
+          </div>
+          <div class="bulk-buttons">
+            <button class="btn-download-all" id="btnDlZip">
+              <span>📦 Download Both (ZIP)</span>
+            </button>
+            <button class="btn-secondary" id="btnReset">
+              <span>🔄 Separate Another File</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Engine Options -->
-    <div class="settings-grid">
-      <div class="setting-card selected" id="optDemucs">
-        <div class="setting-header">
-          <div class="setting-title">
-            <span>🧠 Meta HTDemucs AI</span>
-            <span class="badge green">Studio Quality</span>
+    <!-- ========================================== -->
+    <!-- TAB 2: AI VOICE GENERATOR                  -->
+    <!-- ========================================== -->
+    <div id="voiceGenTabContent" class="tab-content" style="display: none;">
+      <!-- Voice Generator Header -->
+      <header>
+        <div class="top-badges">
+          <span class="badge gold">★ 22 Kokoro AI Narrator Voices ★</span>
+          <span class="badge green">⏱️ Precision Timestamp Alignment</span>
+          <span class="badge purple">⚡ Instant Audio Previews</span>
+        </div>
+        <h1 class="app-title">AI Voice Generator with Timestamps</h1>
+        <p class="app-subtitle">
+          Provide your script with timestamps in JSON format to generate full synchronized narration audio. Audition all 22 male & female voices with zero delay!
+        </p>
+      </header>
+
+      <!-- Step 1: Voice Audition & Selection Section -->
+      <div class="voice-studio-section">
+        <div class="voice-section-header">
+          <div class="voice-section-title">
+            <span>1. Choose Narrator Voice</span>
+            <span class="voice-selected-pill" id="selectedVoicePill">Selected: am_liam (US English)</span>
           </div>
-          <input type="radio" name="engine" value="demucs" checked>
-        </div>
-        <div class="setting-desc">
-          State-of-the-art 4-stem deep learning model. Separates vocals and background music with pristine broadcast fidelity. Runs locally via WebGPU/WASM.
-        </div>
-      </div>
-
-      <div class="setting-card" id="optDsp">
-        <div class="setting-header">
-          <div class="setting-title">
-            <span>⚡ Instant Vocal Extractor (DSP)</span>
-            <span class="badge">0-Second Speed</span>
-          </div>
-          <input type="radio" name="engine" value="dsp">
-        </div>
-        <div class="setting-desc">
-          Zero-wait center channel cancellation. Instant processing for quick karaoke, testing, or older laptops without downloading the neural weights.
-        </div>
-      </div>
-    </div>
-
-    <!-- Action Button -->
-    <button class="btn-action-primary" id="btnProcess" disabled>
-      <span>🚀 Select Audio or Video to Start</span>
-    </button>
-
-    <!-- Progress Card -->
-    <div class="progress-box" id="progressBox">
-      <div class="progress-header">
-        <span class="progress-title" id="progressTitle">Processing Audio...</span>
-        <span class="progress-pct" id="progressPct">0%</span>
-      </div>
-      <div class="progress-bar-bg">
-        <div class="progress-bar-fill" id="progressBar"></div>
-      </div>
-      <div class="progress-status" id="progressStatus">Initializing...</div>
-    </div>
-
-    <!-- Studio Video & Audio Workspace (Side-by-Side Outputs) -->
-    <div class="studio-workspace" id="studioWorkspace">
-      <div class="mixer-header">
-        <div>
-          <div class="mixer-title" id="studioFileTitle">🎬 Separation Output Preview</div>
-          <div class="mixer-subtitle" id="studioFileSubtitle">Side-by-side synchronized comparison: Isolated Vocals vs. Background Music</div>
-        </div>
-        <div class="header-actions">
-          <button class="btn-sync-toggle" id="btnSyncBoth">
-            <span>🔄 Sync Play Both</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Side-by-Side Two Outputs Grid -->
-      <div class="side-by-side-grid">
-        <!-- Output 1: Narrator / Vocals Only -->
-        <div class="video-output-card" id="cardVocals">
-          <div class="video-card-header">
-            <div class="video-title-wrap">
-              <span class="stem-badge vocals">🎙️ Vocals Only</span>
-              <h3 class="video-card-title">Narrator / Vocal Track</h3>
-            </div>
-            <span class="badge green">Isolated</span>
-          </div>
-
-          <!-- Video / Audio Player -->
-          <div class="media-container" id="containerVocals">
-            <video id="videoVocals" class="player-media-element" playsinline controls></video>
-            <div class="audio-view-fallback" id="audioFallbackVocals" style="display: none;">
-              <canvas id="canvasVocals" class="audio-canvas"></canvas>
-              <audio id="audioVocals" controls class="native-audio-player"></audio>
-            </div>
-          </div>
-
-          <!-- EXACTLY TWO OPTIONS BELOW: Download MP4 & Download MP3 -->
-          <div class="video-actions-bar">
-            <button class="btn-download-primary" id="btnDlVocalsMp4">
-              <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-              <span>Download MP4</span>
+          <div class="voice-gender-tabs">
+            <button type="button" class="voice-gender-btn active male" id="btnFilterMale">
+              👨 Male Narrators (10)
             </button>
-            <button class="btn-download-secondary" id="btnDlVocalsMp3">
-              <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
-              <span>Download MP3</span>
+            <button type="button" class="voice-gender-btn female" id="btnFilterFemale">
+              👩 Female Narrators (12)
             </button>
           </div>
         </div>
 
-        <!-- Output 2: Background Music Only -->
-        <div class="video-output-card" id="cardBgm">
-          <div class="video-card-header">
-            <div class="video-title-wrap">
-              <span class="stem-badge bgm">🎵 Background Only</span>
-              <h3 class="video-card-title">Music & Sound Effects</h3>
-            </div>
-            <span class="badge green">Clean BGM</span>
-          </div>
+        <!-- Voice Cards Grid -->
+        <div class="voice-cards-grid" id="voiceCardsGrid">
+          <div class="voice-loading-spinner">Loading 22 Voice Auditions...</div>
+        </div>
+      </div>
 
-          <!-- Video / Audio Player -->
-          <div class="media-container" id="containerBgm">
-            <video id="videoBgm" class="player-media-element" playsinline controls></video>
-            <div class="audio-view-fallback" id="audioFallbackBgm" style="display: none;">
-              <canvas id="canvasBgm" class="audio-canvas"></canvas>
-              <audio id="audioBgm" controls class="native-audio-player"></audio>
-            </div>
+      <!-- Step 2: Timestamped Script Input Section -->
+      <div class="script-studio-section">
+        <div class="script-section-header">
+          <div class="script-title-row">
+            <span class="script-title-text">2. Script with Timestamps (JSON)</span>
+            <span class="cues-count-badge" id="cuesCountBadge">4 Cues Ready</span>
           </div>
+          <div class="script-actions-bar">
+            <button type="button" class="btn-script-action" id="btnLoadSampleScript">
+              <span>📋 Load Sample Script</span>
+            </button>
+            <button type="button" class="btn-script-action" id="btnUploadScriptFile">
+              <span>📁 Upload JSON</span>
+            </button>
+            <button type="button" class="btn-script-action help" id="btnOpenFormatHelp">
+              <span>❓ Format Guide & Help</span>
+            </button>
+            <input type="file" id="scriptFileInput" accept=".json,.txt" style="display: none;">
+          </div>
+        </div>
 
-          <!-- EXACTLY TWO OPTIONS BELOW: Download MP4 & Download MP3 -->
-          <div class="video-actions-bar">
-            <button class="btn-download-primary" id="btnDlBgmMp4">
-              <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-              <span>Download MP4</span>
-            </button>
-            <button class="btn-download-secondary" id="btnDlBgmMp3">
-              <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
-              <span>Download MP3</span>
-            </button>
+        <!-- Textarea for JSON script -->
+        <div class="script-textarea-wrap">
+          <textarea id="scriptJsonInput" class="script-textarea" spellcheck="false" placeholder="Paste your JSON script here with start, end, and text fields..."></textarea>
+        </div>
+
+        <!-- Cues Timeline Preview List -->
+        <div class="cues-preview-container" id="cuesPreviewContainer">
+          <div class="cues-preview-header">
+            <span>Parsed Timeline Cues:</span>
+            <span id="cuesSummaryInfo" style="color: var(--accent-cyan);">4 Cues &bull; ~19.5s Total</span>
+          </div>
+          <div class="cues-preview-list" id="cuesPreviewList">
+            <!-- Rendered dynamically -->
           </div>
         </div>
       </div>
 
-      <!-- Studio Bottom Bar -->
-      <div class="bulk-download-bar">
-        <div class="bulk-title">
-          <span>📦 Batch & Export Options</span>
-          <span class="bulk-subtitle" id="bulkSubtitle">Quickly save both outputs or process other files</span>
+      <!-- Generate Audio Button -->
+      <button class="btn-action-primary" id="btnGenerateVoice">
+        <span>🚀 Generate Full Audio Timeline</span>
+      </button>
+
+      <!-- Voice Generation Progress Box -->
+      <div class="progress-box" id="voiceProgressBox" style="display: none;">
+        <div class="progress-header">
+          <span class="progress-title" id="voiceProgressTitle">Generating Narration Audio...</span>
+          <span class="progress-pct" id="voiceProgressPct">0%</span>
         </div>
-        <div class="bulk-buttons">
-          <button class="btn-download-all" id="btnDlZip">
-            <span>📦 Download Both (ZIP)</span>
-          </button>
-          <button class="btn-secondary" id="btnReset">
-            <span>🔄 Separate Another File</span>
-          </button>
+        <div class="progress-track">
+          <div class="progress-fill" id="voiceProgressBar"></div>
+        </div>
+        <div class="progress-status" id="voiceProgressStatus">Initializing...</div>
+      </div>
+
+      <!-- Voice Output Studio -->
+      <div class="voice-output-card" id="voiceOutputCard" style="display: none;">
+        <div class="voice-output-header">
+          <div>
+            <span class="stem-badge vocals">🎙️ Generated Timeline Audio</span>
+            <h3 class="voice-output-title" id="voiceOutputTitle">Full Narration Track with Exact Timestamps</h3>
+          </div>
+          <span class="badge green" id="voiceOutputMetaBadge">19.5s &bull; 44.1kHz</span>
+        </div>
+
+        <!-- Audio Player & Timeline -->
+        <div class="voice-player-container">
+          <audio id="voiceTimelineAudio" controls class="native-audio-player" style="width: 100%;"></audio>
+        </div>
+
+        <!-- Two Download Options -->
+        <div class="video-actions-bar" style="margin-top: 20px;">
+          <a class="btn-download-primary" id="btnDlVoiceMp3" download="Generated_Narration_Timeline.mp3">
+            <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+            <span>Download Full Audio (MP3)</span>
+          </a>
+          <a class="btn-download-secondary" id="btnDlVoiceWav" download="Generated_Narration_Timeline.wav">
+            <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <span>Download Full Audio (WAV)</span>
+          </a>
         </div>
       </div>
     </div>
@@ -208,7 +354,7 @@
     <!-- Footer -->
     <footer>
       <div>
-        Built with <b>Meta HTDemucs AI</b> &bull; <b>ONNX Runtime Web</b> &bull; <b>WebGPU / WebAssembly</b>
+        Built with <b>Meta HTDemucs AI</b> &bull; <b>Kokoro 82M AI Voices</b> &bull; <b>WebGPU / WebAssembly</b>
       </div>
       <div style="margin-top: 6px;">
         Open Source &bull; Hosted 100% Free on GitHub Pages &bull; 
@@ -218,6 +364,74 @@
         <span class="guide-pill" id="openGuideBtn">📖 How to host on GitHub Pages (Guide)</span>
       </div>
     </footer>
+  </div>
+
+  <!-- Format Guide & Help Modal -->
+  <div class="modal-overlay" id="formatHelpModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>📖 Timestamped Script Format Guide (JSON)</h3>
+        <button class="modal-close" id="closeFormatHelpBtn">&times;</button>
+      </div>
+
+      <div class="guide-step">
+        <h4>JSON Structure</h4>
+        <p>Your script should be a JSON array of cues. Each cue specifies the <code>start</code> timestamp in seconds, the spoken <code>text</code>, and an optional <code>voice</code> ID.</p>
+      </div>
+
+      <div class="guide-step">
+        <h4>Example JSON:</h4>
+        <pre class="code-preview-block"><code id="codeExampleJson">[
+  {
+    "id": 1,
+    "start": 0.0,
+    "end": 3.8,
+    "text": "Welcome to today's mystery trivia challenge!",
+    "voice": "am_liam"
+  },
+  {
+    "id": 2,
+    "start": 4.5,
+    "end": 9.2,
+    "text": "Can you guess which beloved Hollywood star is celebrating his birthday today?",
+    "voice": "am_liam"
+  },
+  {
+    "id": 3,
+    "start": 10.0,
+    "end": 15.0,
+    "text": "Option A: Sean Murray. Option B: Mark Harmon. Option C: Michael Weatherly.",
+    "voice": "am_liam"
+  },
+  {
+    "id": 4,
+    "start": 16.0,
+    "end": 19.5,
+    "text": "Your ten-second countdown begins right now!",
+    "voice": "am_liam"
+  }
+]</code></pre>
+      </div>
+
+      <div class="guide-step">
+        <h4>Field Details:</h4>
+        <ul style="padding-left: 20px; font-size: 13.5px; color: var(--text-muted); line-height: 1.7;">
+          <li><b><code>start</code></b>: <i>(Required)</i> Start timestamp in seconds on the timeline (e.g. <code>0.0</code>, <code>4.5</code>).</li>
+          <li><b><code>end</code></b>: <i>(Optional)</i> End timestamp in seconds. If omitted, it will automatically be calculated based on word count.</li>
+          <li><b><code>text</code></b>: <i>(Required)</i> The narration or dialogue text for the narrator to speak.</li>
+          <li><b><code>voice</code></b>: <i>(Optional)</i> The voice ID (e.g. <code>am_liam</code>, <code>af_sarah</code>). If omitted, the voice selected in the Voice Studio will be used for all cues!</li>
+        </ul>
+      </div>
+
+      <div style="display: flex; gap: 12px; margin-top: 16px;">
+        <button type="button" class="btn-action-primary" id="btnCopyJsonExample" style="flex: 1;">
+          📋 Copy Example JSON
+        </button>
+        <button type="button" class="btn-secondary" id="btnApplySampleScript" style="flex: 1;">
+          ✨ Use in Editor
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Hosting Guide Modal -->

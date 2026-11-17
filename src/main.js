@@ -6,6 +6,7 @@ import JSZip from 'jszip';
 import { decodeAudioFromFile, fastDspVocalSeparator, encodeWav, encodeMp3, downloadBlob } from './audioUtils.js';
 import { checkDeviceCapabilities, loadDemucsModel, separateAudioWithDemucs } from './demucs.js';
 import { muxVideoWithAudio } from './videoUtils.js';
+import { getVoiceList, SAMPLE_JSON_SCRIPT, parseScriptInput, generateFullTimelineAudio } from './voiceGenerator.js';
 
 // DOM Elements
 const dropZone = document.getElementById('dropZone');
@@ -343,26 +344,34 @@ async function processSingleItem(item, onProgressUpdate) {
     rawStems = fastDspVocalSeparator(decoded.left, decoded.right, 44100);
     onProgressUpdate(85, 'Encoding stems...');
   } else {
-    // Demucs AI
+    // Demucs AI with resilient auto-fallback
     onProgressUpdate(15, 'Preparing Meta HTDemucs AI Model...');
-    await loadDemucsModel({
-      onDownloadProgress: (loaded, total) => {
-        const pct = Math.min(45, 15 + Math.round((loaded / total) * 30));
-        const mb = (loaded / (1024 * 1024)).toFixed(1);
-        onProgressUpdate(pct, `Downloading Neural Weights: ${mb}MB (${pct}%)`);
-      },
-      onStatus: (msg) => onProgressUpdate(null, msg)
-    });
+    try {
+      await loadDemucsModel({
+        onDownloadProgress: (loaded, total) => {
+          const pct = Math.min(45, 15 + Math.round((loaded / total) * 30));
+          const mb = (loaded / (1024 * 1024)).toFixed(1);
+          onProgressUpdate(pct, `Downloading Neural Weights: ${mb}MB (${pct}%)`);
+        },
+        onStatus: (msg) => onProgressUpdate(null, msg)
+      });
 
-    onProgressUpdate(48, 'Separating Vocals and Background Music...');
-    rawStems = await separateAudioWithDemucs(decoded.left, decoded.right, {
-      onProgress: (prog) => {
-        const p = typeof prog === 'object' && prog !== null ? prog.progress : prog;
-        const pct = Math.min(92, 48 + Math.round((p || 0) * 44));
-        onProgressUpdate(pct, `Neural Inference: ${((p || 0) * 100).toFixed(0)}% complete`);
-      },
-      onStatus: (msg) => onProgressUpdate(null, msg)
-    });
+      onProgressUpdate(48, 'Separating Vocals and Background Music...');
+      rawStems = await separateAudioWithDemucs(decoded.left, decoded.right, {
+        onProgress: (prog) => {
+          const p = typeof prog === 'object' && prog !== null ? prog.progress : prog;
+          const pct = Math.min(92, 48 + Math.round((p || 0) * 44));
+          onProgressUpdate(pct, `Neural Inference: ${((p || 0) * 100).toFixed(0)}% complete`);
+        },
+        onStatus: (msg) => onProgressUpdate(null, msg)
+      });
+    } catch (err) {
+      console.warn('[Demucs Error, auto-falling back to DSP]:', err);
+      onProgressUpdate(50, `⚠️ Browser WebGPU/WASM limit: ${err.message}. Auto-switching to Instant Vocal Isolator...`);
+      await new Promise(r => setTimeout(r, 600));
+      rawStems = fastDspVocalSeparator(decoded.left, decoded.right, 44100);
+      onProgressUpdate(88, 'Vocal Separation completed! Generating outputs...');
+    }
   }
 
   onProgressUpdate(94, 'Generating 16-bit WAV & MP3 audio buffers...');
@@ -664,4 +673,370 @@ openGuideBtn.addEventListener('click', () => guideModal.style.display = 'flex');
 closeGuideBtn.addEventListener('click', () => guideModal.style.display = 'none');
 guideModal.addEventListener('click', (e) => {
   if (e.target === guideModal) guideModal.style.display = 'none';
+});
+
+// ========================================================
+// TAB NAVIGATION SYSTEM
+// ========================================================
+const tabBtnSeparator = document.getElementById('tabBtnSeparator');
+const tabBtnVoiceGen = document.getElementById('tabBtnVoiceGen');
+const separatorTabContent = document.getElementById('separatorTabContent');
+const voiceGenTabContent = document.getElementById('voiceGenTabContent');
+
+function switchTab(targetTab) {
+  if (targetTab === 'separator') {
+    tabBtnSeparator.classList.add('active');
+    tabBtnVoiceGen.classList.remove('active');
+    separatorTabContent.style.display = 'block';
+    voiceGenTabContent.style.display = 'none';
+  } else if (targetTab === 'voiceGen') {
+    tabBtnVoiceGen.classList.add('active');
+    tabBtnSeparator.classList.remove('active');
+    separatorTabContent.style.display = 'none';
+    voiceGenTabContent.style.display = 'block';
+    initVoiceStudioOnce();
+  }
+}
+
+tabBtnSeparator.addEventListener('click', () => switchTab('separator'));
+tabBtnVoiceGen.addEventListener('click', () => switchTab('voiceGen'));
+
+// ========================================================
+// AI VOICE GENERATOR STUDIO LOGIC
+// ========================================================
+const selectedVoicePill = document.getElementById('selectedVoicePill');
+const btnFilterMale = document.getElementById('btnFilterMale');
+const btnFilterFemale = document.getElementById('btnFilterFemale');
+const voiceCardsGrid = document.getElementById('voiceCardsGrid');
+
+const scriptJsonInput = document.getElementById('scriptJsonInput');
+const cuesCountBadge = document.getElementById('cuesCountBadge');
+const cuesSummaryInfo = document.getElementById('cuesSummaryInfo');
+const cuesPreviewList = document.getElementById('cuesPreviewList');
+const btnLoadSampleScript = document.getElementById('btnLoadSampleScript');
+const btnUploadScriptFile = document.getElementById('btnUploadScriptFile');
+const scriptFileInput = document.getElementById('scriptFileInput');
+
+const btnOpenFormatHelp = document.getElementById('btnOpenFormatHelp');
+const closeFormatHelpBtn = document.getElementById('closeFormatHelpBtn');
+const formatHelpModal = document.getElementById('formatHelpModal');
+const btnCopyJsonExample = document.getElementById('btnCopyJsonExample');
+const btnApplySampleScript = document.getElementById('btnApplySampleScript');
+
+const btnGenerateVoice = document.getElementById('btnGenerateVoice');
+const voiceProgressBox = document.getElementById('voiceProgressBox');
+const voiceProgressTitle = document.getElementById('voiceProgressTitle');
+const voiceProgressPct = document.getElementById('voiceProgressPct');
+const voiceProgressBar = document.getElementById('voiceProgressBar');
+const voiceProgressStatus = document.getElementById('voiceProgressStatus');
+
+const voiceOutputCard = document.getElementById('voiceOutputCard');
+const voiceTimelineAudio = document.getElementById('voiceTimelineAudio');
+const voiceOutputTitle = document.getElementById('voiceOutputTitle');
+const voiceOutputMetaBadge = document.getElementById('voiceOutputMetaBadge');
+const btnDlVoiceMp3 = document.getElementById('btnDlVoiceMp3');
+const btnDlVoiceWav = document.getElementById('btnDlVoiceWav');
+
+let voicesData = [];
+let selectedVoiceId = 'am_liam';
+let currentGenderFilter = 'male'; // 'male' or 'female'
+let isVoiceStudioInitialized = false;
+
+// Audio player for auditions
+const auditionAudio = new Audio();
+let currentAuditionId = null;
+let currentAuditionBtn = null;
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function initVoiceStudioOnce() {
+  if (isVoiceStudioInitialized) return;
+  isVoiceStudioInitialized = true;
+
+  try {
+    voiceCardsGrid.innerHTML = '<div class="voice-loading-spinner" style="padding:20px; color:#38bdf8;">Loading 22 Voice Auditions...</div>';
+    voicesData = await getVoiceList();
+    renderVoiceCards();
+    
+    // Set initial sample script
+    if (!scriptJsonInput.value.trim()) {
+      scriptJsonInput.value = SAMPLE_JSON_SCRIPT;
+    }
+    refreshCuesPreview();
+  } catch (err) {
+    console.error('Failed to load voice database:', err);
+    voiceCardsGrid.innerHTML = `<div style="color:#ef4444; padding:20px;">Failed to load voice auditions: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderVoiceCards() {
+  if (!voiceCardsGrid || voicesData.length === 0) return;
+
+  const filtered = voicesData.filter(v => v.gender === currentGenderFilter);
+  voiceCardsGrid.innerHTML = '';
+
+  filtered.forEach(voice => {
+    const card = document.createElement('div');
+    const isSelected = voice.id === selectedVoiceId;
+    const isFemale = voice.gender === 'female';
+    card.className = `voice-card ${isSelected ? 'selected' : ''} ${isFemale ? 'female' : ''}`;
+    card.dataset.voiceId = voice.id;
+
+    const accentTagClass = voice.accent.includes('UK') ? 'uk' : 'us';
+
+    card.innerHTML = `
+      <div class="voice-card-top">
+        <div class="voice-name-wrap">
+          <div class="voice-title-row">
+            <span style="font-size:18px;">${isFemale ? '👩' : '👨'}</span>
+            <span class="voice-id-text">${voice.name}</span>
+            <span class="voice-tag ${accentTagClass}">${voice.accent}</span>
+          </div>
+          <p class="voice-desc-text">${voice.desc}</p>
+        </div>
+      </div>
+      <div class="voice-card-bottom">
+        <button type="button" class="btn-voice-preview" data-voice-id="${voice.id}">
+          <span>▶ Preview</span>
+        </button>
+        <label class="voice-select-radio" style="cursor: pointer;">
+          <input type="radio" name="selectedVoiceRadio" value="${voice.id}" ${isSelected ? 'checked' : ''}>
+          <span>${isSelected ? 'Selected' : 'Select'}</span>
+        </label>
+      </div>
+    `;
+
+    // Preview button
+    const previewBtn = card.querySelector('.btn-voice-preview');
+    previewBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleAuditionAudio(voice, previewBtn);
+    });
+
+    // Selecting voice
+    card.addEventListener('click', () => {
+      selectVoice(voice.id);
+    });
+
+    voiceCardsGrid.appendChild(card);
+  });
+}
+
+function toggleAuditionAudio(voice, btn) {
+  if (currentAuditionId === voice.id && !auditionAudio.paused) {
+    auditionAudio.pause();
+    btn.innerHTML = '<span>▶ Preview</span>';
+    btn.classList.remove('playing');
+    currentAuditionId = null;
+    currentAuditionBtn = null;
+    return;
+  }
+
+  if (currentAuditionBtn && currentAuditionBtn !== btn) {
+    currentAuditionBtn.innerHTML = '<span>▶ Preview</span>';
+    currentAuditionBtn.classList.remove('playing');
+  }
+
+  auditionAudio.pause();
+  auditionAudio.src = voice.audio;
+  auditionAudio.currentTime = 0;
+  
+  auditionAudio.play().then(() => {
+    btn.innerHTML = '<span>⏸ Stop</span>';
+    btn.classList.add('playing');
+    currentAuditionId = voice.id;
+    currentAuditionBtn = btn;
+  }).catch((err) => {
+    console.warn('Playback error:', err);
+  });
+
+  auditionAudio.onended = () => {
+    btn.innerHTML = '<span>▶ Preview</span>';
+    btn.classList.remove('playing');
+    currentAuditionId = null;
+    currentAuditionBtn = null;
+  };
+}
+
+function selectVoice(voiceId) {
+  selectedVoiceId = voiceId;
+  const voice = voicesData.find(v => v.id === voiceId);
+  if (voice && selectedVoicePill) {
+    selectedVoicePill.textContent = `Selected: ${voice.name} (${voice.accent})`;
+  }
+
+  document.querySelectorAll('.voice-card').forEach(c => {
+    const isThis = c.dataset.voiceId === voiceId;
+    if (isThis) {
+      c.classList.add('selected');
+      const radio = c.querySelector('input[type="radio"]');
+      if (radio) radio.checked = true;
+      const lbl = c.querySelector('.voice-select-radio span');
+      if (lbl) lbl.textContent = 'Selected';
+    } else {
+      c.classList.remove('selected');
+      const radio = c.querySelector('input[type="radio"]');
+      if (radio) radio.checked = false;
+      const lbl = c.querySelector('.voice-select-radio span');
+      if (lbl) lbl.textContent = 'Select';
+    }
+  });
+
+  refreshCuesPreview();
+}
+
+btnFilterMale.addEventListener('click', () => {
+  currentGenderFilter = 'male';
+  btnFilterMale.classList.add('active');
+  btnFilterFemale.classList.remove('active');
+  renderVoiceCards();
+});
+
+btnFilterFemale.addEventListener('click', () => {
+  currentGenderFilter = 'female';
+  btnFilterFemale.classList.add('active');
+  btnFilterMale.classList.remove('active');
+  renderVoiceCards();
+});
+
+// Live Script & Timeline Cues Parsing
+function refreshCuesPreview() {
+  const text = scriptJsonInput.value.trim();
+  if (!text) {
+    cuesCountBadge.textContent = '0 Cues';
+    cuesCountBadge.className = 'cues-count-badge';
+    cuesSummaryInfo.textContent = 'Paste or type script JSON above';
+    cuesPreviewList.innerHTML = '<div style="color:var(--text-dim); font-size:12px; padding:6px;">No cues parsed yet.</div>';
+    btnGenerateVoice.disabled = true;
+    return;
+  }
+
+  try {
+    const cues = parseScriptInput(text);
+    cuesCountBadge.textContent = `${cues.length} Cues Ready`;
+    cuesCountBadge.className = 'cues-count-badge';
+    const totalSec = Math.max(...cues.map(c => c.end));
+    cuesSummaryInfo.textContent = `${cues.length} Cues • ~${totalSec.toFixed(1)}s Total`;
+
+    cuesPreviewList.innerHTML = cues.map(c => `
+      <div class="cue-preview-item">
+        <span class="cue-time-tag">${c.start.toFixed(1)}s - ${c.end.toFixed(1)}s</span>
+        <span class="cue-voice-tag">${c.voice || selectedVoiceId}</span>
+        <span class="cue-text-snippet" title="${escapeHtml(c.text)}">${escapeHtml(c.text)}</span>
+      </div>
+    `).join('');
+
+    btnGenerateVoice.disabled = false;
+  } catch (err) {
+    cuesCountBadge.textContent = '⚠️ Invalid Format';
+    cuesCountBadge.className = 'cues-count-badge error';
+    cuesSummaryInfo.textContent = err.message;
+    cuesPreviewList.innerHTML = `<div style="color:#f87171; font-size:12px; padding:6px;">${escapeHtml(err.message)}</div>`;
+    btnGenerateVoice.disabled = true;
+  }
+}
+
+scriptJsonInput.addEventListener('input', refreshCuesPreview);
+
+btnLoadSampleScript.addEventListener('click', () => {
+  scriptJsonInput.value = SAMPLE_JSON_SCRIPT;
+  refreshCuesPreview();
+});
+
+btnUploadScriptFile.addEventListener('click', () => {
+  scriptFileInput.value = '';
+  scriptFileInput.click();
+});
+
+scriptFileInput.addEventListener('change', (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    scriptJsonInput.value = evt.target.result;
+    refreshCuesPreview();
+  };
+  reader.readAsText(file);
+});
+
+// Format Help Modal
+btnOpenFormatHelp.addEventListener('click', () => formatHelpModal.style.display = 'flex');
+closeFormatHelpBtn.addEventListener('click', () => formatHelpModal.style.display = 'none');
+formatHelpModal.addEventListener('click', (e) => {
+  if (e.target === formatHelpModal) formatHelpModal.style.display = 'none';
+});
+
+btnCopyJsonExample.addEventListener('click', () => {
+  navigator.clipboard.writeText(SAMPLE_JSON_SCRIPT).then(() => {
+    const orig = btnCopyJsonExample.innerHTML;
+    btnCopyJsonExample.innerHTML = '✅ Copied to Clipboard!';
+    setTimeout(() => {
+      btnCopyJsonExample.innerHTML = orig;
+    }, 2000);
+  });
+});
+
+btnApplySampleScript.addEventListener('click', () => {
+  scriptJsonInput.value = SAMPLE_JSON_SCRIPT;
+  refreshCuesPreview();
+  formatHelpModal.style.display = 'none';
+});
+
+// Generate Voice Timeline
+btnGenerateVoice.addEventListener('click', async () => {
+  let cues;
+  try {
+    cues = parseScriptInput(scriptJsonInput.value);
+  } catch (err) {
+    alert(`Script error: ${err.message}`);
+    return;
+  }
+
+  btnGenerateVoice.disabled = true;
+  voiceProgressBox.style.display = 'block';
+  voiceOutputCard.style.display = 'none';
+  voiceProgressBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  function updateVoiceProgress(pct, status) {
+    if (pct !== null) {
+      voiceProgressPct.textContent = `${pct}%`;
+      voiceProgressBar.style.width = `${pct}%`;
+    }
+    if (status) {
+      voiceProgressStatus.textContent = status;
+    }
+  }
+
+  try {
+    const result = await generateFullTimelineAudio(cues, selectedVoiceId, {
+      onProgress: (p) => updateVoiceProgress(p),
+      onStatus: (s) => updateVoiceProgress(null, s)
+    });
+
+    voiceTimelineAudio.src = result.mp3Url;
+    btnDlVoiceMp3.href = result.mp3Url;
+    btnDlVoiceMp3.download = `Narration_${selectedVoiceId}_timeline.mp3`;
+
+    btnDlVoiceWav.href = result.wavUrl;
+    btnDlVoiceWav.download = `Narration_${selectedVoiceId}_timeline.wav`;
+
+    voiceOutputMetaBadge.textContent = `${result.duration}s • 44.1kHz • ${result.cuesCount} Cues`;
+    voiceOutputTitle.textContent = `Full Narration Track (${selectedVoiceId})`;
+
+    voiceProgressBox.style.display = 'none';
+    voiceOutputCard.style.display = 'block';
+    voiceOutputCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    console.error('Voice generation failed:', err);
+    updateVoiceProgress(null, `❌ Error: ${err.message}`);
+  } finally {
+    btnGenerateVoice.disabled = false;
+  }
 });

@@ -6,11 +6,22 @@ import * as ort from 'onnxruntime-web';
 import { DemucsProcessor, CONSTANTS } from 'demucs-web';
 import { combineStems } from './audioUtils.js';
 
-// Configure ONNX Runtime Web WASM paths (matching installed onnxruntime-web version)
+// Configure ONNX Runtime Web WASM paths (prefer local assets to avoid version mismatch, fallback to CDN)
 const ortVersion = ort.env?.versions?.web || '1.31.1';
-const WASM_PATH = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ortVersion}/dist/`;
-ort.env.wasm.wasmPaths = WASM_PATH;
-ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
+const localWasmBase = typeof window !== 'undefined' ? new URL('./assets/', window.location.href).href : './assets/';
+ort.env.wasm.wasmPaths = {
+  'ort-wasm-simd-threaded.wasm': `${localWasmBase}ort-wasm-simd-threaded.wasm`,
+  'ort-wasm-simd-threaded.jsep.wasm': `${localWasmBase}ort-wasm-simd-threaded.jsep.wasm`,
+  'ort-wasm-simd-threaded.mjs': `${localWasmBase}ort-wasm-simd-threaded.mjs`,
+  'ort-wasm-simd-threaded.jsep.mjs': `${localWasmBase}ort-wasm-simd-threaded.jsep.mjs`,
+};
+
+// Safe threading: multi-threading only if crossOriginIsolated is true
+if (typeof self !== 'undefined' && !self.crossOriginIsolated) {
+  ort.env.wasm.numThreads = 1;
+} else {
+  ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
+}
 
 const CACHE_NAME = 'demucs-onnx-model-cache-v1';
 const MODEL_URL = CONSTANTS.DEFAULT_MODEL_URL || 'https://huggingface.co/timcsy/demucs-web-onnx/resolve/main/htdemucs_embedded.onnx';

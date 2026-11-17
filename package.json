@@ -32,6 +32,7 @@
     "coi-serviceworker": "^0.1.7",
     "demucs-web": "^1.0.2",
     "jszip": "^3.10.1",
+    "kokoro-js": "^1.2.1",
     "onnxruntime-web": "1.31.1"
   },
   "devDependencies": {
