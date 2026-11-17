@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production Builds (Built automatically by GitHub Actions)
+dist/
+docs/
+
+# Testing & Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment & Editor
+.env
+.env.local
+.vscode/
+.idea/
+
+# OS Files
+.DS_Store
+Thumbs.db
