@@ -30,17 +30,36 @@
 
     <!-- Upload Card -->
     <label class="upload-card" id="dropZone" for="fileInput">
-      <input type="file" id="fileInput" accept="audio/*,video/*" style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;">
+      <input type="file" id="fileInput" multiple accept="audio/*,video/*" style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;">
       <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
       </svg>
-      <div class="upload-title" id="uploadTitle">Drop your Audio or Video file here</div>
-      <div class="upload-desc" id="uploadDesc">Click anywhere to browse or drag and drop any file</div>
-      <div class="supported-formats">MP3, WAV, M4A, FLAC, OGG &bull; MP4, WebM, MOV, MKV</div>
-      <button type="button" class="btn-demo" id="btnLoadDemo" onclick="event.preventDefault(); event.stopPropagation();">
-        <span>🎧 Try Built-in Demo Audio</span>
-      </button>
+      <div class="upload-title" id="uploadTitle">Drop your Audio or Video files here</div>
+      <div class="upload-desc" id="uploadDesc">Click anywhere to browse &bull; Single file or Multi-file Batch Upload</div>
+      <div class="supported-formats">MP4, WebM, MOV, MKV &bull; MP3, WAV, M4A, FLAC, OGG</div>
+      <div class="upload-actions-row">
+        <button type="button" class="btn-demo" id="btnLoadDemo" onclick="event.preventDefault(); event.stopPropagation();">
+          <span>🎧 Try Demo Audio</span>
+        </button>
+        <span class="upload-pill">📁 Batch Upload Enabled</span>
+      </div>
     </label>
+
+    <!-- Batch Queue Section (visible when multiple files are queued) -->
+    <div class="batch-queue-card" id="batchQueueCard" style="display: none;">
+      <div class="batch-header">
+        <div class="batch-title">
+          <span>📋 Batch Upload Queue</span>
+          <span class="badge purple" id="batchCountBadge">0 Files</span>
+        </div>
+        <div class="batch-controls">
+          <button type="button" class="btn-batch-action" id="btnBatchClear">🗑️ Clear Queue</button>
+        </div>
+      </div>
+      <div class="batch-items-list" id="batchItemsList">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
 
     <!-- Engine Options -->
     <div class="settings-grid">
@@ -88,129 +107,96 @@
       <div class="progress-status" id="progressStatus">Initializing...</div>
     </div>
 
-    <!-- Studio Mixer Workspace -->
+    <!-- Studio Video & Audio Workspace (Side-by-Side Outputs) -->
     <div class="studio-workspace" id="studioWorkspace">
       <div class="mixer-header">
-        <div class="mixer-title">🎚️ Multi-Track Separation Studio</div>
+        <div>
+          <div class="mixer-title" id="studioFileTitle">🎬 Separation Output Preview</div>
+          <div class="mixer-subtitle" id="studioFileSubtitle">Side-by-side synchronized comparison: Isolated Vocals vs. Background Music</div>
+        </div>
+        <div class="header-actions">
+          <button class="btn-sync-toggle" id="btnSyncBoth">
+            <span>🔄 Sync Play Both</span>
+          </button>
+        </div>
       </div>
 
-      <!-- Master Transport Bar -->
-      <div class="master-controls">
-        <div class="transport-bar">
-          <button class="btn-transport" id="btnPlayMaster" title="Play / Pause">
-            ▶
-          </button>
-          <div class="timeline-slider-wrap">
-            <input type="range" class="timeline-slider" id="timelineSlider" min="0" max="100" value="0" step="0.1">
-            <div class="time-display">
-              <span id="currentTimeLabel">0:00</span>
-              <span id="totalTimeLabel">0:00</span>
+      <!-- Side-by-Side Two Outputs Grid -->
+      <div class="side-by-side-grid">
+        <!-- Output 1: Narrator / Vocals Only -->
+        <div class="video-output-card" id="cardVocals">
+          <div class="video-card-header">
+            <div class="video-title-wrap">
+              <span class="stem-badge vocals">🎙️ Vocals Only</span>
+              <h3 class="video-card-title">Narrator / Vocal Track</h3>
+            </div>
+            <span class="badge green">Isolated</span>
+          </div>
+
+          <!-- Video / Audio Player -->
+          <div class="media-container" id="containerVocals">
+            <video id="videoVocals" class="player-media-element" playsinline controls></video>
+            <div class="audio-view-fallback" id="audioFallbackVocals" style="display: none;">
+              <canvas id="canvasVocals" class="audio-canvas"></canvas>
+              <audio id="audioVocals" controls class="native-audio-player"></audio>
             </div>
           </div>
-        </div>
-        <!-- Live Visualizer -->
-        <canvas class="visualizer-canvas" id="canvasVisualizer"></canvas>
-      </div>
 
-      <!-- Stem Tracks List -->
-      <div class="stem-tracks-list">
-        <!-- Track 1: Vocals Only -->
-        <div class="stem-card" data-stem="vocals">
-          <div class="stem-info">
-            <span class="stem-badge vocals">Voice Only</span>
-            <div class="stem-name">Isolated Vocals</div>
-          </div>
-          <div class="stem-fader-wrap">
-            <input type="range" class="stem-slider" id="vol_vocals" min="0" max="1.5" step="0.05" value="1.0">
-          </div>
-          <div class="stem-buttons">
-            <button class="btn-control btn-mute" data-stem="vocals">M</button>
-            <button class="btn-control btn-solo" data-stem="vocals">S</button>
-            <button class="btn-download-stem" id="btnDlVocals">
-              ⬇ WAV
+          <!-- EXACTLY TWO OPTIONS BELOW: Download MP4 & Download MP3 -->
+          <div class="video-actions-bar">
+            <button class="btn-download-primary" id="btnDlVocalsMp4">
+              <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              <span>Download MP4</span>
+            </button>
+            <button class="btn-download-secondary" id="btnDlVocalsMp3">
+              <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+              <span>Download MP3</span>
             </button>
           </div>
         </div>
 
-        <!-- Track 2: Background Music Only -->
-        <div class="stem-card" data-stem="no_vocals">
-          <div class="stem-info">
-            <span class="stem-badge bgm">BGM & FX Only</span>
-            <div class="stem-name">Background Music</div>
+        <!-- Output 2: Background Music Only -->
+        <div class="video-output-card" id="cardBgm">
+          <div class="video-card-header">
+            <div class="video-title-wrap">
+              <span class="stem-badge bgm">🎵 Background Only</span>
+              <h3 class="video-card-title">Music & Sound Effects</h3>
+            </div>
+            <span class="badge green">Clean BGM</span>
           </div>
-          <div class="stem-fader-wrap">
-            <input type="range" class="stem-slider" id="vol_no_vocals" min="0" max="1.5" step="0.05" value="1.0">
-          </div>
-          <div class="stem-buttons">
-            <button class="btn-control btn-mute" data-stem="no_vocals">M</button>
-            <button class="btn-control btn-solo" data-stem="no_vocals">S</button>
-            <button class="btn-download-stem" id="btnDlBgm">
-              ⬇ WAV
-            </button>
-          </div>
-        </div>
 
-        <!-- Track 3: Drums -->
-        <div class="stem-card demucs-only" data-stem="drums">
-          <div class="stem-info">
-            <span class="stem-badge drums">Percussion</span>
-            <div class="stem-name">Drums / Beats</div>
+          <!-- Video / Audio Player -->
+          <div class="media-container" id="containerBgm">
+            <video id="videoBgm" class="player-media-element" playsinline controls></video>
+            <div class="audio-view-fallback" id="audioFallbackBgm" style="display: none;">
+              <canvas id="canvasBgm" class="audio-canvas"></canvas>
+              <audio id="audioBgm" controls class="native-audio-player"></audio>
+            </div>
           </div>
-          <div class="stem-fader-wrap">
-            <input type="range" class="stem-slider" id="vol_drums" min="0" max="1.5" step="0.05" value="1.0">
-          </div>
-          <div class="stem-buttons">
-            <button class="btn-control btn-mute" data-stem="drums">M</button>
-            <button class="btn-control btn-solo" data-stem="drums">S</button>
-            <button class="btn-download-stem" id="btnDlDrums">
-              ⬇ WAV
-            </button>
-          </div>
-        </div>
 
-        <!-- Track 4: Bass -->
-        <div class="stem-card demucs-only" data-stem="bass">
-          <div class="stem-info">
-            <span class="stem-badge bass">Low End</span>
-            <div class="stem-name">Bassline</div>
-          </div>
-          <div class="stem-fader-wrap">
-            <input type="range" class="stem-slider" id="vol_bass" min="0" max="1.5" step="0.05" value="1.0">
-          </div>
-          <div class="stem-buttons">
-            <button class="btn-control btn-mute" data-stem="bass">M</button>
-            <button class="btn-control btn-solo" data-stem="bass">S</button>
-            <button class="btn-download-stem" id="btnDlBass">
-              ⬇ WAV
+          <!-- EXACTLY TWO OPTIONS BELOW: Download MP4 & Download MP3 -->
+          <div class="video-actions-bar">
+            <button class="btn-download-primary" id="btnDlBgmMp4">
+              <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              <span>Download MP4</span>
             </button>
-          </div>
-        </div>
-
-        <!-- Track 5: Other -->
-        <div class="stem-card demucs-only" data-stem="other">
-          <div class="stem-info">
-            <span class="stem-badge other">Harmony</span>
-            <div class="stem-name">Melody & Instruments</div>
-          </div>
-          <div class="stem-fader-wrap">
-            <input type="range" class="stem-slider" id="vol_other" min="0" max="1.5" step="0.05" value="1.0">
-          </div>
-          <div class="stem-buttons">
-            <button class="btn-control btn-mute" data-stem="other">M</button>
-            <button class="btn-control btn-solo" data-stem="other">S</button>
-            <button class="btn-download-stem" id="btnDlOther">
-              ⬇ WAV
+            <button class="btn-download-secondary" id="btnDlBgmMp3">
+              <svg class="dl-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+              <span>Download MP3</span>
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Bulk Download Suite -->
+      <!-- Studio Bottom Bar -->
       <div class="bulk-download-bar">
-        <div class="bulk-title">📦 Export All Separated Stems</div>
+        <div class="bulk-title">
+          <span>📦 Batch & Export Options</span>
+          <span class="bulk-subtitle" id="bulkSubtitle">Quickly save both outputs or process other files</span>
+        </div>
         <div class="bulk-buttons">
           <button class="btn-download-all" id="btnDlZip">
-            <span>📦 Download All Stems (ZIP)</span>
+            <span>📦 Download Both (ZIP)</span>
           </button>
           <button class="btn-secondary" id="btnReset">
             <span>🔄 Separate Another File</span>

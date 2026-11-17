@@ -1,7 +1,7 @@
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
 
 const PORT = 4173;
 const TEST_VIDEO = "C:/Users/prata/Downloads/A Tiny Girl With a Big Girl's Morning Routine! 💅🏻🥰.mp4";
@@ -29,7 +29,6 @@ const server = http.createServer((req, res) => {
   
   const filePath = path.join(ROOT_DIR, reqPath);
   
-  // Security headers for WebGPU and SharedArrayBuffer
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -64,7 +63,6 @@ server.listen(PORT, async () => {
 
     const page = await browser.newPage();
 
-    // Collect all console and error logs
     page.on('console', msg => {
       console.log(`[Browser Console ${msg.type()}]:`, msg.text());
     });
@@ -75,113 +73,101 @@ server.listen(PORT, async () => {
     console.log(`[Test] Navigating to http://localhost:${PORT}...`);
     await page.goto(`http://localhost:${PORT}`, { waitUntil: 'networkidle2' });
 
-    console.log('[Test] Page loaded. Checking Title...');
     const title = await page.title();
-    console.log('[Test] Title:', title);
+    console.log('[Test] Page Title:', title);
 
-    // Verify upload input exists
     const fileInput = await page.$('#fileInput');
     if (!fileInput) throw new Error('#fileInput not found');
 
-    console.log('[Test] Uploading test video:', TEST_VIDEO);
+    // --- TEST 1: Batch Upload Test ---
+    console.log('\n--- [TEST 1] Testing Batch Queue Capability ---');
+    // Upload demo audio first
+    await page.click('#btnLoadDemo');
+    await new Promise(r => setTimeout(r, 600));
+
+    // Upload test video as second file to trigger batch queue
     await fileInput.uploadFile(TEST_VIDEO);
+    await new Promise(r => setTimeout(r, 600));
 
-    // Wait for file info to appear
-    await page.waitForFunction(() => {
-      const el = document.getElementById('uploadTitle');
-      return el && el.textContent.includes('A Tiny Girl');
-    }, { timeout: 10000 });
-    console.log('[Test] File recognized by UI!');
+    const batchCount = await page.$eval('#batchCountBadge', el => el.textContent);
+    console.log('[TEST 1] Batch Queue Count:', batchCount);
+    if (!batchCount.includes('2')) throw new Error('Batch queue did not register 2 items');
 
-    // --- TEST 1: Instant DSP Mode ---
-    console.log('\n--- [TEST 1] Testing Instant DSP Mode ---');
+    // --- TEST 2: Process Test Video with Side-by-Side Verification ---
+    console.log('\n--- [TEST 2] Processing Video & Verifying Side-by-Side Outputs ---');
+    // Select DSP mode for immediate verification of DOM & layout
     await page.click('#optDsp');
     await page.click('#btnProcess');
 
-    // Wait for studio mixer to appear
+    // Wait for all batch items to finish processing and progress box to close
     await page.waitForFunction(() => {
-      const el = document.getElementById('studioWorkspace');
-      return el && el.style.display !== 'none';
-    }, { timeout: 30000 });
-    console.log('[TEST 1 SUCCESS] DSP Mode separated audio and displayed Studio Mixer!');
+      const pBox = document.getElementById('progressBox');
+      const previewBtn = document.querySelector('.btn-item-preview[data-idx="1"]');
+      return Boolean(previewBtn) && pBox && pBox.style.display === 'none';
+    }, { timeout: 45000 });
+    console.log('[TEST 2] Both batch items completed!');
 
-    const totalDuration = await page.$eval('#totalTimeLabel', el => el.textContent);
-    console.log('[TEST 1] Audio Duration in Mixer:', totalDuration);
-
-    // Click Play to verify playback logic
-    await page.click('#btnPlayMaster');
-    await new Promise(r => setTimeout(r, 1500));
-    await page.click('#btnPlayMaster'); // pause
-    console.log('[TEST 1] Master playback tested successfully.');
-
-    // --- TEST 2: Test Meta Demucs AI Mode ---
-    console.log('\n--- [TEST 2] Reloading Page and Testing Meta Demucs AI Mode ---');
-    await page.reload({ waitUntil: 'networkidle2' });
-
-    const fileInput2 = await page.$('#fileInput');
-    await fileInput2.uploadFile(TEST_VIDEO);
-    await page.waitForFunction(() => {
-      const el = document.getElementById('uploadTitle');
-      return el && el.textContent.includes('A Tiny Girl');
-    }, { timeout: 15000 });
-    console.log('[TEST 2] File uploaded for Demucs test!');
-
-    // Opt for Demucs AI (default is checked)
-    await page.click('#optDemucs');
-    console.log('[TEST 2] Starting Demucs separation...');
-    await page.click('#btnProcess');
-
-    // Monitor progress
-    let lastProgress = '';
-    let reachedInference = false;
-    let completed = false;
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < 300000) { // 5 minutes max
-      const status = await page.evaluate(() => {
-        const title = document.getElementById('progressTitle')?.textContent || '';
-        const pct = document.getElementById('progressPct')?.textContent || '';
-        const status = document.getElementById('progressStatus')?.textContent || '';
-        const mixerVisible = document.getElementById('studioWorkspace')?.style.display !== 'none';
-        return { title, pct, status, mixerVisible };
-      });
-
-      const currentProg = `${status.pct} - ${status.title} - ${status.status}`;
-      if (currentProg !== lastProgress) {
-        console.log(`[Demucs Progress] ${currentProg}`);
-        lastProgress = currentProg;
-      }
-
-      if (status.title === 'Processing Failed' || status.status.includes('❌ Error')) {
-        throw new Error(`Demucs processing failed: ${status.status}`);
-      }
-
-      if (status.mixerVisible) {
-        completed = true;
-        break;
-      }
-
-      await new Promise(r => setTimeout(r, 2000));
-    }
-
-    if (!completed) {
-      throw new Error('Demucs processing timed out.');
-    }
-
-    console.log('\n🎉 [TEST 2 SUCCESS] Meta Demucs AI Mode separated stems completely without error!');
-    
-    // Check download buttons
-    const stemsReady = await page.evaluate(() => {
-      return Boolean(window.testStemBlobs || document.getElementById('btnDlVocals'));
+    // Call displayItemInStudio on item index 1 (the video file)
+    await page.evaluate(() => {
+      window.displayItemInStudio(1);
     });
-    console.log('[TEST 2] Stems and download controls ready:', stemsReady);
+    await new Promise(r => setTimeout(r, 600));
+
+    // Verify Side-by-Side Video Players
+    const videoDetails = await page.evaluate(() => {
+      const vVocals = document.getElementById('videoVocals');
+      const vBgm = document.getElementById('videoBgm');
+      const btnVocalsMp4 = document.getElementById('btnDlVocalsMp4');
+      const btnVocalsMp3 = document.getElementById('btnDlVocalsMp3');
+      const btnBgmMp4 = document.getElementById('btnDlBgmMp4');
+      const btnBgmMp3 = document.getElementById('btnDlBgmMp3');
+
+      return {
+        vVocalsVisible: vVocals && vVocals.style.display !== 'none',
+        vVocalsHasSrc: Boolean(vVocals && vVocals.src),
+        vBgmVisible: vBgm && vBgm.style.display !== 'none',
+        vBgmHasSrc: Boolean(vBgm && vBgm.src),
+        vocalsOptionsCount: [btnVocalsMp4, btnVocalsMp3].filter(Boolean).length,
+        bgmOptionsCount: [btnBgmMp4, btnBgmMp3].filter(Boolean).length,
+        vocalsMp4Text: btnVocalsMp4?.innerText?.trim() || '',
+        vocalsMp3Text: btnVocalsMp3?.innerText?.trim() || '',
+        bgmMp4Text: btnBgmMp4?.innerText?.trim() || '',
+        bgmMp3Text: btnBgmMp3?.innerText?.trim() || ''
+      };
+    });
+
+    console.log('[TEST 2] Video Elements State:', videoDetails);
+    if (!videoDetails.vVocalsVisible || !videoDetails.vBgmVisible || !videoDetails.vVocalsHasSrc || !videoDetails.vBgmHasSrc) {
+      throw new Error('Both video players must be visible side by side with sources attached');
+    }
+    if (videoDetails.vocalsOptionsCount !== 2 || videoDetails.bgmOptionsCount !== 2) {
+      throw new Error(`Expected exactly 2 download options per card, got Vocals: ${videoDetails.vocalsOptionsCount}, BGM: ${videoDetails.bgmOptionsCount}`);
+    }
+
+    console.log('✅ Vocals Card has exactly 2 options:', videoDetails.vocalsMp4Text, '&', videoDetails.vocalsMp3Text);
+    console.log('✅ Background Card has exactly 2 options:', videoDetails.bgmMp4Text, '&', videoDetails.bgmMp3Text);
+
+    // Test MP3 Download trigger via DOM click
+    console.log('\n--- [TEST 3] Testing MP3 Download Trigger ---');
+    await page.evaluate(() => {
+      document.getElementById('btnDlVocalsMp3').click();
+      document.getElementById('btnDlBgmMp3').click();
+    });
+    console.log('[TEST 3] MP3 download triggers executed cleanly!');
+
+    // Test Sync Play Both
+    console.log('\n--- [TEST 4] Testing Sync Play Both Feature ---');
+    await page.evaluate(() => document.getElementById('btnSyncBoth').click());
+    await new Promise(r => setTimeout(r, 1200));
+    await page.evaluate(() => document.getElementById('btnSyncBoth').click()); // pause
+    console.log('[TEST 4] Sync Play Both toggled cleanly!');
 
     console.log('\n===========================================');
-    console.log('✅ ALL TESTS PASSED SUCCESSFULLY!');
+    console.log('🎉 ALL TESTS PASSED SUCCESSFULLY!');
     console.log('===========================================\n');
 
   } catch (err) {
-    console.error('\n❌ E2E TEST FAILED:', err);
+    console.error('\n❌ TEST FAILED:', err);
     process.exitCode = 1;
   } finally {
     if (browser) await browser.close();

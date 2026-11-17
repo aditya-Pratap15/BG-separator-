@@ -2,6 +2,7 @@
  * Audio Utilities for Decoding, DSP Vocal Separation, WAV Encoding & Packaging
  */
 import JSZip from 'jszip';
+import { Mp3Encoder } from '@breezystack/lamejs';
 
 /**
  * Decode any Audio or Video file into 44.1kHz Stereo PCM channels
@@ -171,6 +172,42 @@ export function encodeWav(left, right, sampleRate = 44100) {
   }
 
   return new Blob([buffer], { type: 'audio/wav' });
+}
+
+/**
+ * Encode Stereo Float32 PCM to 192kbps MP3 Blob
+ */
+export function encodeMp3(left, right, sampleRate = 44100, kbps = 192) {
+  const encoder = new Mp3Encoder(2, sampleRate, kbps);
+  const mp3Data = [];
+
+  const len = left.length;
+  const leftInt16 = new Int16Array(len);
+  const rightInt16 = new Int16Array(len);
+
+  for (let i = 0; i < len; i++) {
+    const l = Math.max(-1, Math.min(1, left[i]));
+    leftInt16[i] = l < 0 ? l * 0x8000 : l * 0x7FFF;
+    const r = Math.max(-1, Math.min(1, right[i]));
+    rightInt16[i] = r < 0 ? r * 0x8000 : r * 0x7FFF;
+  }
+
+  const chunkSize = 1152;
+  for (let i = 0; i < len; i += chunkSize) {
+    const leftChunk = leftInt16.subarray(i, i + chunkSize);
+    const rightChunk = rightInt16.subarray(i, i + chunkSize);
+    const mp3buf = encoder.encodeBuffer(leftChunk, rightChunk);
+    if (mp3buf.length > 0) {
+      mp3Data.push(mp3buf);
+    }
+  }
+
+  const endBuf = encoder.flush();
+  if (endBuf.length > 0) {
+    mp3Data.push(endBuf);
+  }
+
+  return new Blob(mp3Data, { type: 'audio/mp3' });
 }
 
 /**
