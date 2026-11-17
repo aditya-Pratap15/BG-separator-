@@ -8,12 +8,12 @@ export default defineConfig({
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
   },
-  optimizeDeps: {
-    exclude: ['onnxruntime-web']
-  },
   build: {
     target: 'esnext',
     outDir: 'dist',
     assetsDir: 'assets',
-  }
+    rollupOptions: {
+      input: 'dev.html',
+    },
+  },
 });

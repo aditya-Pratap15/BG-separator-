@@ -91,7 +91,6 @@ optDsp.addEventListener('click', () => {
 });
 
 // File Drag & Drop Handling
-dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('dragover', (e) => {
   e.preventDefault();
   dropZone.classList.add('drag-over');

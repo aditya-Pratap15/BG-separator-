@@ -125,6 +125,7 @@ p.app-subtitle {
 
 /* Upload Card */
 .upload-card {
+  display: block;
   background: var(--card-bg);
   backdrop-filter: blur(16px);
   border: 2px dashed var(--card-border);

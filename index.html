@@ -9,7 +9,8 @@
   <script src="coi-serviceworker.js"></script>
   
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
-  <link rel="stylesheet" href="./src/style.css">
+  <script type="module" crossorigin src="./assets/dev-KcpnYQpb.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/dev-DNgs3Ozd.css">
 </head>
 <body>
   <div class="bg-glow"></div>
@@ -29,18 +30,18 @@
     </header>
 
     <!-- Upload Card -->
-    <div class="upload-card" id="dropZone">
-      <input type="file" id="fileInput" accept="audio/*,video/*" style="display: none;">
+    <label class="upload-card" id="dropZone" for="fileInput">
+      <input type="file" id="fileInput" accept="audio/*,video/*" style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;">
       <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
       </svg>
       <div class="upload-title" id="uploadTitle">Drop your Audio or Video file here</div>
-      <div class="upload-desc" id="uploadDesc">Click to browse or drag and drop any file</div>
+      <div class="upload-desc" id="uploadDesc">Click anywhere to browse or drag and drop any file</div>
       <div class="supported-formats">MP3, WAV, M4A, FLAC, OGG &bull; MP4, WebM, MOV, MKV</div>
-      <button type="button" class="btn-demo" id="btnLoadDemo">
+      <button type="button" class="btn-demo" id="btnLoadDemo" onclick="event.preventDefault(); event.stopPropagation();">
         <span>🎧 Try Built-in Demo Audio</span>
       </button>
-    </div>
+    </label>
 
     <!-- Engine Options -->
     <div class="settings-grid">
@@ -271,6 +272,5 @@
     </div>
   </div>
 
-  <script type="module" src="./src/main.js"></script>
 </body>
 </html>

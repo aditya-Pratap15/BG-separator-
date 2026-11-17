@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VocalClear AI — Free In-Browser Background Music & Voice Separator</title>
+  
+  <!-- Enable Cross-Origin Isolation for WebGPU & WASM SharedArrayBuffer on GitHub Pages -->
+  <script src="coi-serviceworker.js"></script>
+  
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <div class="bg-glow"></div>
+
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="top-badges">
+        <span class="badge green">✨ 100% Free Forever</span>
+        <span class="badge">🔒 In-Browser &bull; Private &bull; No Uploads</span>
+        <span class="badge purple" id="deviceBadge">⚡ Checking Hardware Acceleration...</span>
+      </div>
+      <h1 class="app-title">Background & Voice Separator</h1>
+      <p class="app-subtitle">
+        Separate any video or song into isolated <b>Vocals</b> and clean <b>Background Music & Sound Effects</b> directly in your browser using Meta's HTDemucs AI.
+      </p>
+    </header>
+
+    <!-- Upload Card -->
+    <label class="upload-card" id="dropZone" for="fileInput">
+      <input type="file" id="fileInput" accept="audio/*,video/*" style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;">
+      <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+      </svg>
+      <div class="upload-title" id="uploadTitle">Drop your Audio or Video file here</div>
+      <div class="upload-desc" id="uploadDesc">Click anywhere to browse or drag and drop any file</div>
+      <div class="supported-formats">MP3, WAV, M4A, FLAC, OGG &bull; MP4, WebM, MOV, MKV</div>
+      <button type="button" class="btn-demo" id="btnLoadDemo" onclick="event.preventDefault(); event.stopPropagation();">
+        <span>🎧 Try Built-in Demo Audio</span>
+      </button>
+    </label>
+
+    <!-- Engine Options -->
+    <div class="settings-grid">
+      <div class="setting-card selected" id="optDemucs">
+        <div class="setting-header">
+          <div class="setting-title">
+            <span>🧠 Meta HTDemucs AI</span>
+            <span class="badge green">Studio Quality</span>
+          </div>
+          <input type="radio" name="engine" value="demucs" checked>
+        </div>
+        <div class="setting-desc">
+          State-of-the-art 4-stem deep learning model. Separates vocals and background music with pristine broadcast fidelity. Runs locally via WebGPU/WASM.
+        </div>
+      </div>
+
+      <div class="setting-card" id="optDsp">
+        <div class="setting-header">
+          <div class="setting-title">
+            <span>⚡ Instant Vocal Extractor (DSP)</span>
+            <span class="badge">0-Second Speed</span>
+          </div>
+          <input type="radio" name="engine" value="dsp">
+        </div>
+        <div class="setting-desc">
+          Zero-wait center channel cancellation. Instant processing for quick karaoke, testing, or older laptops without downloading the neural weights.
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Button -->
+    <button class="btn-action-primary" id="btnProcess" disabled>
+      <span>🚀 Select Audio or Video to Start</span>
+    </button>
+
+    <!-- Progress Card -->
+    <div class="progress-box" id="progressBox">
+      <div class="progress-header">
+        <span class="progress-title" id="progressTitle">Processing Audio...</span>
+        <span class="progress-pct" id="progressPct">0%</span>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressBar"></div>
+      </div>
+      <div class="progress-status" id="progressStatus">Initializing...</div>
+    </div>
+
+    <!-- Studio Mixer Workspace -->
+    <div class="studio-workspace" id="studioWorkspace">
+      <div class="mixer-header">
+        <div class="mixer-title">🎚️ Multi-Track Separation Studio</div>
+      </div>
+
+      <!-- Master Transport Bar -->
+      <div class="master-controls">
+        <div class="transport-bar">
+          <button class="btn-transport" id="btnPlayMaster" title="Play / Pause">
+            ▶
+          </button>
+          <div class="timeline-slider-wrap">
+            <input type="range" class="timeline-slider" id="timelineSlider" min="0" max="100" value="0" step="0.1">
+            <div class="time-display">
+              <span id="currentTimeLabel">0:00</span>
+              <span id="totalTimeLabel">0:00</span>
+            </div>
+          </div>
+        </div>
+        <!-- Live Visualizer -->
+        <canvas class="visualizer-canvas" id="canvasVisualizer"></canvas>
+      </div>
+
+      <!-- Stem Tracks List -->
+      <div class="stem-tracks-list">
+        <!-- Track 1: Vocals Only -->
+        <div class="stem-card" data-stem="vocals">
+          <div class="stem-info">
+            <span class="stem-badge vocals">Voice Only</span>
+            <div class="stem-name">Isolated Vocals</div>
+          </div>
+          <div class="stem-fader-wrap">
+            <input type="range" class="stem-slider" id="vol_vocals" min="0" max="1.5" step="0.05" value="1.0">
+          </div>
+          <div class="stem-buttons">
+            <button class="btn-control btn-mute" data-stem="vocals">M</button>
+            <button class="btn-control btn-solo" data-stem="vocals">S</button>
+            <button class="btn-download-stem" id="btnDlVocals">
+              ⬇ WAV
+            </button>
+          </div>
+        </div>
+
+        <!-- Track 2: Background Music Only -->
+        <div class="stem-card" data-stem="no_vocals">
+          <div class="stem-info">
+            <span class="stem-badge bgm">BGM & FX Only</span>
+            <div class="stem-name">Background Music</div>
+          </div>
+          <div class="stem-fader-wrap">
+            <input type="range" class="stem-slider" id="vol_no_vocals" min="0" max="1.5" step="0.05" value="1.0">
+          </div>
+          <div class="stem-buttons">
+            <button class="btn-control btn-mute" data-stem="no_vocals">M</button>
+            <button class="btn-control btn-solo" data-stem="no_vocals">S</button>
+            <button class="btn-download-stem" id="btnDlBgm">
+              ⬇ WAV
+            </button>
+          </div>
+        </div>
+
+        <!-- Track 3: Drums -->
+        <div class="stem-card demucs-only" data-stem="drums">
+          <div class="stem-info">
+            <span class="stem-badge drums">Percussion</span>
+            <div class="stem-name">Drums / Beats</div>
+          </div>
+          <div class="stem-fader-wrap">
+            <input type="range" class="stem-slider" id="vol_drums" min="0" max="1.5" step="0.05" value="1.0">
+          </div>
+          <div class="stem-buttons">
+            <button class="btn-control btn-mute" data-stem="drums">M</button>
+            <button class="btn-control btn-solo" data-stem="drums">S</button>
+            <button class="btn-download-stem" id="btnDlDrums">
+              ⬇ WAV
+            </button>
+          </div>
+        </div>
+
+        <!-- Track 4: Bass -->
+        <div class="stem-card demucs-only" data-stem="bass">
+          <div class="stem-info">
+            <span class="stem-badge bass">Low End</span>
+            <div class="stem-name">Bassline</div>
+          </div>
+          <div class="stem-fader-wrap">
+            <input type="range" class="stem-slider" id="vol_bass" min="0" max="1.5" step="0.05" value="1.0">
+          </div>
+          <div class="stem-buttons">
+            <button class="btn-control btn-mute" data-stem="bass">M</button>
+            <button class="btn-control btn-solo" data-stem="bass">S</button>
+            <button class="btn-download-stem" id="btnDlBass">
+              ⬇ WAV
+            </button>
+          </div>
+        </div>
+
+        <!-- Track 5: Other -->
+        <div class="stem-card demucs-only" data-stem="other">
+          <div class="stem-info">
+            <span class="stem-badge other">Harmony</span>
+            <div class="stem-name">Melody & Instruments</div>
+          </div>
+          <div class="stem-fader-wrap">
+            <input type="range" class="stem-slider" id="vol_other" min="0" max="1.5" step="0.05" value="1.0">
+          </div>
+          <div class="stem-buttons">
+            <button class="btn-control btn-mute" data-stem="other">M</button>
+            <button class="btn-control btn-solo" data-stem="other">S</button>
+            <button class="btn-download-stem" id="btnDlOther">
+              ⬇ WAV
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bulk Download Suite -->
+      <div class="bulk-download-bar">
+        <div class="bulk-title">📦 Export All Separated Stems</div>
+        <div class="bulk-buttons">
+          <button class="btn-download-all" id="btnDlZip">
+            <span>📦 Download All Stems (ZIP)</span>
+          </button>
+          <button class="btn-secondary" id="btnReset">
+            <span>🔄 Separate Another File</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <div>
+        Built with <b>Meta HTDemucs AI</b> &bull; <b>ONNX Runtime Web</b> &bull; <b>WebGPU / WebAssembly</b>
+      </div>
+      <div style="margin-top: 6px;">
+        Open Source &bull; Hosted 100% Free on GitHub Pages &bull; 
+        <a href="https://github.com/aditya-Pratap15/BG-separator-.git" target="_blank">View GitHub Repository</a>
+      </div>
+      <div>
+        <span class="guide-pill" id="openGuideBtn">📖 How to host on GitHub Pages (Guide)</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Hosting Guide Modal -->
+  <div class="modal-overlay" id="guideModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>🚀 How to Host this Website for Free on GitHub Pages</h3>
+        <button class="modal-close" id="closeGuideBtn">&times;</button>
+      </div>
+
+      <div class="guide-step">
+        <h4>Step 1: Open Your Repository Settings</h4>
+        <p>Go to your repository on GitHub: <code>https://github.com/aditya-Pratap15/BG-separator-</code> and click on the <b>Settings</b> tab at the top.</p>
+      </div>
+
+      <div class="guide-step">
+        <h4>Step 2: Enable GitHub Pages</h4>
+        <p>In the left sidebar, click on <b>Pages</b> (under Code and automation).</p>
+      </div>
+
+      <div class="guide-step">
+        <h4>Step 3: Select the Build Source</h4>
+        <p>Under <b>Build and deployment</b> &gt; <b>Source</b>, select:
+        <br>👉 <b>GitHub Actions</b> (Recommended — automatically builds and deploys every push)
+        <br><i>or</i> <b>Deploy from a branch</b> &gt; Branch: <code>main</code> / <code>root</code>.</p>
+      </div>
+
+      <div class="guide-step">
+        <h4>Step 4: Your Live URL!</h4>
+        <p>In 1–2 minutes, your website will be live at:
+        <br>🌐 <code>https://aditya-pratap15.github.io/BG-separator-/</code></p>
+      </div>
+
+      <button class="btn-action-primary" style="margin-top: 10px;" onclick="document.getElementById('guideModal').style.display='none'">
+        Got it!
+      </button>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
