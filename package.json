@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/postbuild.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node scripts/test-e2e.js"
   },
   "repository": {
     "type": "git",
@@ -26,9 +27,9 @@
   "license": "MIT",
   "dependencies": {
     "coi-serviceworker": "^0.1.7",
-    "demucs-web": "^0.1.1",
+    "demucs-web": "^1.0.2",
     "jszip": "^3.10.1",
-    "onnxruntime-web": "^1.21.0"
+    "onnxruntime-web": "1.31.1"
   },
   "devDependencies": {
     "vite": "^8.3.8"

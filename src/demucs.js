@@ -6,8 +6,9 @@ import * as ort from 'onnxruntime-web';
 import { DemucsProcessor, CONSTANTS } from 'demucs-web';
 import { combineStems } from './audioUtils.js';
 
-// Configure ONNX Runtime Web WASM paths (using fast edge CDN)
-const WASM_PATH = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/';
+// Configure ONNX Runtime Web WASM paths (matching installed onnxruntime-web version)
+const ortVersion = ort.env?.versions?.web || '1.31.1';
+const WASM_PATH = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ortVersion}/dist/`;
 ort.env.wasm.wasmPaths = WASM_PATH;
 ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
 
@@ -117,20 +118,40 @@ export async function loadDemucsModel({ onDownloadProgress = () => {}, onStatus 
 
   onStatus('Initializing ONNX Inference Session with WebGPU / WASM...');
   
-  // Create processor
-  globalProcessor = new DemucsProcessor({
-    ort,
-    sessionOptions: {
-      executionProviders: navigator.gpu ? ['webgpu', 'wasm'] : ['wasm'],
-      graphOptimizationLevel: 'all'
-    },
-    onLog: (phase, msg) => {
-      console.log(`[Demucs:${phase}]`, msg);
-      onStatus(`[${phase}] ${msg}`);
-    }
-  });
+  // Try WebGPU first if supported, with automatic fallback to high-performance WASM
+  const providersToTry = navigator.gpu ? [['webgpu', 'wasm'], ['wasm']] : [['wasm']];
+  let sessionCreated = false;
+  let lastError = null;
 
-  await globalProcessor.loadModel(modelBuffer);
+  for (const providers of providersToTry) {
+    try {
+      console.log(`[Demucs] Attempting session creation with providers: ${providers.join(', ')}`);
+      globalProcessor = new DemucsProcessor({
+        ort,
+        sessionOptions: {
+          executionProviders: providers,
+          graphOptimizationLevel: 'basic'
+        },
+        onLog: (phase, msg) => {
+          console.log(`[Demucs:${phase}]`, msg);
+          onStatus(`[${phase}] ${msg}`);
+        }
+      });
+
+      await globalProcessor.loadModel(modelBuffer);
+      sessionCreated = true;
+      console.log(`[Demucs] Successfully created session with: ${providers.join(', ')}`);
+      break;
+    } catch (err) {
+      console.warn(`[Demucs] Session creation failed with providers [${providers.join(', ')}]:`, err);
+      lastError = err;
+    }
+  }
+
+  if (!sessionCreated) {
+    throw new Error(`Failed to initialize AI model engine: ${lastError?.message || lastError}`);
+  }
+
   isModelLoaded = true;
   onStatus('Demucs AI Model ready for separation!');
   return globalProcessor;
@@ -147,9 +168,16 @@ export async function separateAudioWithDemucs(left, right, { onProgress = () => 
   const durationSec = (left.length / 44100).toFixed(1);
   onStatus(`Processing audio with Meta HTDemucs AI (${durationSec}s total)...`);
 
-  globalProcessor.onProgress = (prog) => {
-    onProgress(prog);
-    onStatus(`Separating audio stems: ${(prog * 100).toFixed(1)}% complete...`);
+  globalProcessor.onProgress = (progInfo) => {
+    const p = typeof progInfo === 'object' && progInfo !== null ? progInfo.progress : progInfo;
+    const cur = typeof progInfo === 'object' && progInfo !== null ? progInfo.currentSegment : null;
+    const tot = typeof progInfo === 'object' && progInfo !== null ? progInfo.totalSegments : null;
+    onProgress(p);
+    if (cur && tot) {
+      onStatus(`Demucs AI separating stems: segment ${cur}/${tot} (${Math.round(p * 100)}%)...`);
+    } else {
+      onStatus(`Demucs AI separating stems: ${(p * 100).toFixed(1)}% complete...`);
+    }
   };
 
   // Run separation through ONNX model

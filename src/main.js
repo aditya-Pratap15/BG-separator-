@@ -186,8 +186,9 @@ btnProcess.addEventListener('click', async () => {
       updateProgress(50, 'Demucs AI Engine is separating stems...');
       separatedStems = await separateAudioWithDemucs(decodedAudio.left, decodedAudio.right, {
         onProgress: (prog) => {
-          const pct = Math.min(95, 50 + Math.round(prog * 45));
-          updateProgress(pct, `Neural Inference: ${(prog * 100).toFixed(1)}% complete`);
+          const p = typeof prog === 'object' && prog !== null ? prog.progress : prog;
+          const pct = Math.min(95, 50 + Math.round((p || 0) * 45));
+          updateProgress(pct, `Demucs AI Neural Inference: ${((p || 0) * 100).toFixed(0)}% complete`);
         },
         onStatus: (msg) => updateProgress(null, msg)
       });
@@ -520,6 +521,7 @@ btnReset.addEventListener('click', () => {
   decodedAudio = null;
   separatedStems = null;
   stemBlobs = {};
+  fileInput.value = '';
   uploadTitle.textContent = 'Drop your Audio or Video file here';
   uploadDesc.textContent = 'Click to browse or drag and drop any file';
   btnProcess.disabled = true;
